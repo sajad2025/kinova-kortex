@@ -642,7 +642,6 @@ on factiondev-Precision-5690
 config.status:1161: creating Makefile
 config.status:1161: creating scripts/gmock-config
 config.status:1161: creating build-aux/config.h
-config.status:1342: build-aux/config.h is unchanged
 config.status:1390: executing depfiles commands
 config.status:1390: executing libtool commands
 configure:18613: === configuring in gtest (/home/factiondev/projects/kinova-kortex/thirdParty/protobuf-3.5.1/gmock/gtest)
