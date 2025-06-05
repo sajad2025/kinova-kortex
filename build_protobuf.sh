@@ -10,8 +10,12 @@ PROTOBUF_LOCAL_DIR="thirdParty/protobuf-3.5.1-local"
 # Clean previous build
 echo "Cleaning previous build..."
 rm -rf "$PROTOBUF_LOCAL_DIR"
-cd "$PROTOBUF_SRC_DIR"
-make clean
+if [ -d "$PROTOBUF_SRC_DIR" ]; then
+    cd "$PROTOBUF_SRC_DIR"
+    if [ -f "Makefile" ]; then
+        make clean || true
+    fi
+fi
 
 # Configure and build
 echo "Configuring protobuf..."
