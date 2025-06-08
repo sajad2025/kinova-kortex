@@ -1,0 +1,35 @@
+# Build directories
+build/
+build-*/
+*build/
+*build-*/
+
+# CMake build directories
+cmake-build-*/
+
+# Common build directory patterns
+debug/
+release/
+Debug/
+Release/
+
+# Build artifacts that might be created in root
+*.exe
+*.out
+*.app
+
+# CMake generated files in root (if any)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+!dependencies/conan.cmake
+
+# Conan generated files (if using legacy Conan build)
+conanfile.txt
+conaninfo.txt
+conanbuildinfo.*
+conan.lock
+graph_info.json 
