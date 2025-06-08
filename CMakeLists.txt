@@ -11,235 +11,45 @@
 #    $ cmake .. 
 #    $ make
 #
-#  In Windows (MinGW) :
-#  From the api_cpp/examples directory, invoke:
-#    $ mkdir build
-#    $ cd build/
-#    $ cmake .. -G "MinGW Makefiles"
-#    $ mingw32-make
-#
-#  In Windows (MSVC command line) :
-#  From the api_cpp/examples directory, invoke:
-#    $ call "C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\VC\Auxiliary\Build\vcvars64.bat" [MODIFY THIS PATH FOR YOURS]
-#    $ mkdir build
-#    $ cd build/
-#    $ cmake .. -G "NMake Makefiles"
-#    $ nmake
-#
 # ----------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.5)
 
 project(kortexApiCppExamples VERSION 2.6.0 LANGUAGES CXX)
 
-set(CMAKE_INCLUDE_CURRENT_DIR   ON)
-set(CMAKE_VERBOSE_MAKEFILE      ON)
-set(CMAKE_COLOR_MAKEFILE        ON)
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Set build type to Release if not specified
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-
-option(USE_CONAN "Use the Conan package manager to automatically fetch the Kortex API" ON)
-option(DOWNLOAD_API "Automatically download the API if conan is not used" ON)
-
-# Activate C++ 11
-set (CMAKE_CXX_STANDARD 11)
-
-
-macro(configure_msvc_runtime)
-
-    # Default to statically-linked runtime.
-    if("${MSVC_RUNTIME}" STREQUAL "")
-      set(MSVC_RUNTIME "static")
-    endif()
-
-    # Set compiler options.
-    set(variables
-      CMAKE_C_FLAGS_DEBUG
-      CMAKE_C_FLAGS_MINSIZEREL
-      CMAKE_C_FLAGS_RELEASE
-      CMAKE_C_FLAGS_RELWITHDEBINFO
-      CMAKE_CXX_FLAGS_DEBUG
-      CMAKE_CXX_FLAGS_MINSIZEREL
-      CMAKE_CXX_FLAGS_RELEASE
-      CMAKE_CXX_FLAGS_RELWITHDEBINFO
-    )
-    
-    if(${MSVC_RUNTIME} STREQUAL "static")
-      message(STATUS
-        "MSVC -> forcing use of statically-linked runtime."
-      )
-      foreach(variable ${variables})
-        if(${variable} MATCHES "/MD")
-          string(REGEX REPLACE "/MD" "/MT" ${variable} "${${variable}}")
-        endif()
-      endforeach()
-    
-    else()
-      message(STATUS
-        "MSVC -> forcing use of dynamically-linked runtime."
-      )
-      foreach(variable ${variables})
-        if(${variable} MATCHES "/MT")
-          string(REGEX REPLACE "/MT" "/MD" ${variable} "${${variable}}")
-        endif()
-      endforeach()
-
-    endif()
-
-endmacro()
-
-
+# Include directories
 include_directories(${PROJECT_SOURCE_DIR}/dependencies/cxxopts/)
 include_directories(${PROJECT_SOURCE_DIR}/src/)
+include_directories(${PROJECT_SOURCE_DIR}/dependencies/kortex_api/include)
+include_directories(${PROJECT_SOURCE_DIR}/dependencies/kortex_api/include/client)
+include_directories(${PROJECT_SOURCE_DIR}/dependencies/kortex_api/include/common)
+include_directories(${PROJECT_SOURCE_DIR}/dependencies/kortex_api/include/messages)
+include_directories(${PROJECT_SOURCE_DIR}/dependencies/kortex_api/include/client_stubs)
+include_directories(${PROJECT_SOURCE_DIR}/dependencies/kortex_api/thirdParty/include)
 
-if(MSVC)
-  configure_msvc_runtime()
-else()
-  add_compile_options(-Wall)
-  add_compile_options(-Wno-reorder)
+# Compiler flags
+add_compile_options(-Wall -Wno-reorder)
+add_definitions(-D_OS_UNIX)
 
-endif()
+# Link libraries
+link_libraries(${PROJECT_SOURCE_DIR}/dependencies/kortex_api/lib/libKortexApiCpp.a)
+link_libraries(pthread)
 
-if(UNIX)
-  add_definitions(-D_OS_UNIX)
-elseif(WIN32)
-  add_definitions(-D_OS_WINDOWS -DNOMINMAX)
-  if(MSVC)
-     add_compile_options(/bigobj)
-  endif()
-endif()
-
-if(USE_CONAN)
-
-  include(${PROJECT_SOURCE_DIR}/dependencies/conan.cmake)
-
-  conan_check(REQUIRED)
-  conan_add_remote(
-    NAME kinova_public 
-    URL https://artifactory.kinovaapps.com/artifactory/api/conan/conan-local-public)
-
-  if(UNIX)
-    conan_cmake_run(REQUIRES kortex_api_cpp/2.7.0-r.5@kortex/stable
-                    SETTINGS kortex_api_cpp:compiler=gcc
-                    SETTINGS kortex_api_cpp:compiler.version=5
-                    SETTINGS compiler.libcxx=libstdc++11
-                    PROFILE_AUTO build_type
-                    BASIC_SETUP
-                    UPDATE)
-  elseif(WIN32)
-    if(MSVC)
-
-      _get_msvc_ide_version(_VISUAL_VERSION)
-
-      # TODO Conan artifacts should not require to specify a target to download
-      if (_VISUAL_VERSION EQUAL 14)
-        set(kortex_api_cpp_target "msvc-2015")
-      elseif(_VISUAL_VERSION EQUAL 15)
-        set(kortex_api_cpp_target "msvc-2017")
-      elseif(_VISUAL_VERSION EQUAL 16)
-        set(kortex_api_cpp_target "msvc-2019")
-      endif()
-
-      conan_cmake_run(REQUIRES kortex_api_cpp/2.6.0-r.3@kortex/stable
-                      PROFILE_AUTO build_type
-                      BASIC_SETUP
-                      UPDATE)
-      
-    else()
-      conan_cmake_run(REQUIRES kortex_api_cpp/2.6.0-r.3@kortex/stable
-                      SETTINGS kortex_api_cpp:compiler=gcc
-                      SETTINGS kortex_api_cpp:compiler.version=5
-                      SETTINGS compiler.libcxx=libstdc++11
-                      PROFILE_AUTO build_type
-                      BASIC_SETUP
-                      UPDATE)
-    endif()
-  endif()
-
-  link_libraries(${CONAN_LIBS})
-
-else() # Not using Conan
-
-  # Setup Kortex Api Path
-  if(NOT KORTEX_SUB_DIR)
-    set(KORTEX_SUB_DIR "")
-  else()
-    set(KORTEX_SUB_DIR "${KORTEX_SUB_DIR}/")
-  endif()
-
-  set(KORTEX_DIR "${PROJECT_SOURCE_DIR}/dependencies/kortex_api/${KORTEX_SUB_DIR}")
-
-  if(CMAKE_BUILD_TYPE EQUAL "Debug")
-    set(KORTEX_LIB_SUBDIR "debug")
-  else()
-    set(KORTEX_LIB_SUBDIR "release")
-  endif()
-
-  # Download the API
-  if(DOWNLOAD_API)
-    if(UNIX)
-      execute_process(COMMAND ./download_kortex_api.sh ${KORTEX_SUB_DIR}
-        WORKING_DIRECTORY ../scripts
-        RESULT_VARIABLE DOWNLOAD_API_RESULT
-        OUTPUT_VARIABLE DOWNLOAD_API_OUTPUT)
-      if(NOT DOWNLOAD_API_RESULT EQUAL 0)
-        message("Kortex API was not downloaded prior to running CMake.")
-        message(FATAL_ERROR ${DOWNLOAD_API_OUTPUT})
-      endif()
-    elseif(WIN32)
-      execute_process(COMMAND ./download_kortex_api.bat ${KORTEX_SUB_DIR}
-        WORKING_DIRECTORY ../scripts
-        RESULT_VARIABLE DOWNLOAD_API_RESULT
-        OUTPUT_VARIABLE DOWNLOAD_API_OUTPUT)
-      if(NOT DOWNLOAD_API_RESULT EQUAL 0)
-        message("Kortex API was not downloaded prior to running CMake.")
-        message(FATAL_ERROR ${DOWNLOAD_API_OUTPUT})
-      endif()
-    endif()
-  endif()
-  if(UNIX)
-    link_libraries(${KORTEX_DIR}lib/libKortexApiCpp.a)
-  elseif(WIN32)
-    link_libraries(${KORTEX_DIR}lib/KortexApiCpp.lib)
-  endif()
-
-  # Add Include Directories
-  include_directories(${KORTEX_DIR}include)
-  include_directories(${KORTEX_DIR}include/client)
-  include_directories(${KORTEX_DIR}include/common)
-  include_directories(${KORTEX_DIR}include/messages)
-  include_directories(${KORTEX_DIR}include/client_stubs)
-  
-  # Add protobuf headers from local dependencies
-  include_directories(${KORTEX_DIR}thirdParty/include)
-
-endif()
-
-# link other libs
-if(UNIX)
-  link_libraries(pthread)
-elseif(WIN32)
-  link_libraries(winMM ws2_32)
-else()
-  MESSAGE(FATAL_ERROR "Unknown os! Not supported yet")
-endif()
-
+# Find all example source files
+file(GLOB EXE_LIST "${PROJECT_SOURCE_DIR}/src/[0-9]*.cpp")
 
 # Create executable for each example
-# Look for examples in src directory
-file(GLOB EXE_LIST "${PROJECT_SOURCE_DIR}/src/[0-9]*.cpp")
-list(LENGTH EXE_LIST EXE_COUNT)
-MESSAGE("Found ${EXE_COUNT} files matching pattern [0-9]*.cpp: ${EXE_LIST}")
-foreach ( SRC_FILE ${EXE_LIST} )
-
-  # Get just the filename from the full path
+foreach(SRC_FILE ${EXE_LIST})
   get_filename_component(SRC_FILENAME ${SRC_FILE} NAME)
   string(REPLACE ".cpp" "" TARGET_EXE_NAME ${SRC_FILENAME})
   
-  MESSAGE("creating TARGET_EXE_NAME: '${TARGET_EXE_NAME}'")
-
   add_executable(${TARGET_EXE_NAME} ${SRC_FILE} src/utilities.cpp)
-  
 endforeach()

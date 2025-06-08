@@ -1,35 +1,23 @@
 #!/bin/bash
 
-# Build script for Kinova Kortex examples using local dependencies
-# This script builds the project without requiring Conan or external dependencies
+# Simple build script for Kinova Kortex examples
 
 set -e
 
-BUILD_TYPE=${1:-Release}
-BUILD_DIR="build-local-${BUILD_TYPE,,}"
+BUILD_DIR="build"
 
-echo "Building Kinova Kortex examples with local dependencies..."
-echo "Build type: $BUILD_TYPE"
-echo "Build directory: $BUILD_DIR"
+echo "Building Kinova Kortex examples..."
 
 # Create and enter build directory
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-# Configure with CMake
+# Configure and build
 echo "Configuring with CMake..."
-cmake .. \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DUSE_CONAN=OFF \
-    -DDOWNLOAD_API=OFF
+cmake .. -DCMAKE_BUILD_TYPE=Release
 
-# Build all targets
 echo "Building all examples..."
 make -j$(nproc)
 
 echo "Build completed successfully!"
-echo "Executables are located in: $BUILD_DIR/"
-echo ""
-echo "To run an example:"
-echo "  cd $BUILD_DIR"
-echo "  ./000-Getting_started_01-api_creation" 
+echo "Executables are located in: $BUILD_DIR/" 
