@@ -1,5 +1,143 @@
 # Kinova Kortex API → QNX Build - Agent 2 Actions & Status
 
+## Project Structure & Build Toolchain Overview
+
+### **Project Layout**
+```
+kinova-kortex/
+├── src/                              # Main application source
+│   ├── actuator_low_level_velocity_control.cpp  # Primary application (10KB)
+│   ├── utilities.cpp/.h              # Helper functions and utilities
+│   ├── common.mk                     # QNX build configuration (CRITICAL)
+│   ├── Makefile                      # QNX recursive build entry point
+│   ├── dependencies -> ../dependencies  # Symlink to shared dependencies
+│   └── nto/                          # QNX build output directories
+│       ├── x86_64/o/                 # x86_64 build artifacts
+│       └── aarch64/o-le/             # AArch64 build artifacts (unused)
+├── dependencies/                     # External libraries and APIs
+│   ├── kortex_api/                   # Kinova Kortex API (Linux x86_64)
+│   │   ├── include/                  # API headers (client, server, messages)
+│   │   ├── lib/                      # Precompiled libraries
+│   │   │   ├── libKortexApiCpp.a                    # Full API (25MB, Linux deps)
+│   │   │   └── libKortexApiCpp_without_protobuf.a   # API only (18MB, protobuf external)
+│   │   ├── cmake/                    # CMake integration (unused in QNX build)
+│   │   └── thirdParty/               # Conflicting protobuf headers (excluded)
+│   ├── cxxopts/                      # Command-line argument parsing
+│   │   └── cxxopts.hpp               # Header-only library
+│   └── conan.cmake                   # Conan package manager (unused)
+└── guides/                           # Documentation (various .md files)
+```
+
+### **Build Toolchain Stack**
+
+#### **QNX SDP 8.0 Environment**
+- **Installation**: `/home/factiondev/qnx800/`
+- **Host Tools**: `$QNX_HOST/usr/bin/` (Linux x86_64 cross-compilation tools)
+- **Target Runtime**: `$QNX_TARGET/` (QNX libraries and headers)
+- **Compiler**: GCC 12.2.0 with QNX-specific variants
+- **Standard Library**: **libc++** only (no libstdc++ runtime available)
+
+#### **Available Compiler Variants**
+```bash
+# QNX Compiler Targets (qcc -V)
+12.2.0,gcc_ntoaarch64le      # AArch64 default (libc++)
+12.2.0,gcc_ntoaarch64le_gpp  # AArch64 libstdc++ variant
+12.2.0,gcc_ntox86_64         # x86_64 default (libc++)  
+12.2.0,gcc_ntox86_64_gpp     # x86_64 libstdc++ variant ← USED FOR ABI BRIDGING
+```
+
+#### **Build System Architecture**
+- **Primary**: QNX recursive Makefiles (`qtargets.mk`, `qrules.mk`)
+- **Configuration**: `src/common.mk` (compiler flags, library paths, dependencies)
+- **Multi-Architecture**: Supports x86_64 and AArch64 builds simultaneously
+- **Dependency Management**: Manual static library integration
+
+### **Dependency Analysis**
+
+#### **Kinova Kortex API**
+- **Version**: Latest release (conanmanifest timestamp: 1734017176 = Dec 2024)
+- **Architecture**: Linux x86_64 only (no QNX native build available)
+- **ABI**: Compiled with **libstdc++** (`std::__cxx11::` symbols)
+- **Dependencies**: 
+  - **Full library**: Contains protobuf + Linux system calls
+  - **Without protobuf**: External protobuf required, but still has Linux system calls
+- **Symbol Count**: 910+ libstdc++ ABI symbols requiring compatibility layer
+
+#### **Protobuf Integration**
+- **Version**: 3.5.1 (rebuilt for QNX compatibility)
+- **Build Location**: `~/qnx_workspace/protobuf/build-x86/`
+- **Installation**: `$QNX_TARGET/x86_64/usr/lib/libprotobuf.a`
+- **ABI**: Successfully rebuilt with libstdc++ symbols for Kinova compatibility
+- **Configuration**: `_GLIBCXX_USE_CXX11_ABI=1` + `qcc -Y_gpp` for libstdc++ linking
+
+#### **Command-Line Processing**
+- **Library**: cxxopts (header-only)
+- **Status**: QNX compatible, no ABI issues
+- **Integration**: Direct include, no linking required
+
+### **Current Build Configuration**
+
+#### **Architecture Targeting**
+```makefile
+# Force x86_64 build (Kinova library constraint)
+CPULIST = x86_64
+CC = qcc -V gcc_ntox86_64_gpp    # libstdc++ compatibility
+CXX = qcc -V gcc_ntox86_64_gpp   # libstdc++ compatibility
+```
+
+#### **ABI Compatibility Flags**
+```makefile
+# Critical for symbol compatibility
+CCFLAGS += -D_GLIBCXX_USE_CXX11_ABI=1
+CXXFLAGS += -D_GLIBCXX_USE_CXX11_ABI=1
+```
+
+#### **Library Linking Order**
+```makefile
+# Precise order required for symbol resolution
+LIBS += KortexApiCpp_without_protobuf protobuf stdc++ gcc_s c socket m z
+```
+
+#### **Include Path Priority**
+```makefile
+# Critical: QNX protobuf headers BEFORE Kinova thirdParty
+EXTRA_INCVPATH += $(QNX_TARGET)/x86_64/usr/include     # 1. QNX protobuf
+EXTRA_INCVPATH += $(PROJECT_ROOT)/dependencies/kortex_api/include  # 2. Kinova API
+# Explicitly EXCLUDE: kortex_api/thirdParty (conflicting protobuf)
+```
+
+### **Key Technical Constraints**
+
+#### **Platform Limitations**
+1. **QNX Standard Library**: Only libc++ available, no libstdc++ runtime
+2. **Kinova Library**: Linux x86_64 only, requires libstdc++ ABI compatibility
+3. **System Calls**: Linux-specific functions not available in QNX kernel
+
+#### **ABI Bridging Requirements**
+1. **Compiler Variant**: Must use `gcc_ntox86_64_gpp` for libstdc++ symbol generation
+2. **Protobuf Rebuild**: Required custom build with matching ABI flags
+3. **Symbol Compatibility**: 910+ `__cxx11` symbols need libstdc++ namespace resolution
+
+#### **Unresolved Dependencies**
+1. **`__errno_location`**: Linux errno mechanism (no QNX equivalent)
+2. **`__fdelt_chk`**: Linux file descriptor validation (security function)  
+3. **`std::__atomic_futex_*`**: Linux futex threading primitives (no QNX futex support)
+
+### **Build Verification Commands**
+```bash
+# Environment setup
+source /home/factiondev/qnx800/qnxsdp-env.sh
+
+# Clean build test
+cd src && make clean && make CPULIST=x86_64
+
+# Symbol analysis
+nm dependencies/kortex_api/lib/libKortexApiCpp_without_protobuf.a | grep "__cxx11" | wc -l  # 910
+nm $QNX_TARGET/x86_64/usr/lib/libprotobuf.a | grep "__cxx11" | head -3  # Verify ABI match
+```
+
+---
+
 ## Project State at Handover
 
 **Problem Inherited**: Protobuf ABI compatibility issues at linking stage
