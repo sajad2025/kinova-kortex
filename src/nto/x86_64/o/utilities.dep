@@ -1,0 +1,3 @@
+utilities.o: /home/factiondev/projects/faction-qnx/src/utilities.cpp \
+ /home/factiondev/projects/faction-qnx/src/utilities.h \
+ /home/factiondev/projects/faction-qnx/src/dependencies/cxxopts/cxxopts.hpp

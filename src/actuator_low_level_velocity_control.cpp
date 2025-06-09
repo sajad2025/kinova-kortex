@@ -10,10 +10,27 @@
 *
 */
 
+// QNX feature test macros (must be first)
+#ifdef __QNX__
+#define _POSIX_C_SOURCE 200112L
+#define _QNX_SOURCE
+#endif
+
 #include <iostream>
 #include <string>
 #include <vector>
 #include <math.h>
+
+// QNX-specific headers for networking and time
+#ifdef __QNX__
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <time.h>
+#endif
 
 #include <KDetailedException.h>
 
